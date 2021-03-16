@@ -85,13 +85,15 @@ class RomeoView {
     }
     else {
       $params = array(
-        'issn' => $issn,
+        'item-type' => 'publication',
+        'format' => 'Json',
+        'identifier' => $issn,
       );
       if ($key = variable_get('islandora_scholar_romeo_key', '')) {
-        $params['ak'] = $key;
+        $params['api-key'] = $key;
       }
 
-      $ch = curl_init(url(variable_get('islandora_scholar_romeo_url', 'http://www.sherpa.ac.uk/romeo/api29.php'), array(
+      $ch = curl_init(url(variable_get('islandora_scholar_romeo_url', 'https://v2.sherpa.ac.uk/cgi/retrieve_by_id'), array(
         'query' => $params,
       )));
 
@@ -100,25 +102,15 @@ class RomeoView {
       $romeo_content = trim(curl_exec($ch));
       curl_close($ch);
 
-      try {
-        $processor = new XsltProcessor();
-      }
-      catch (Exception $e) {
-        drupal_set_message(t('@error', array('@error' => $e->getMessage())), 'error');
-        return;
-      }
-
-      $xsl = new DOMDocument();
-      $xsl->load(drupal_get_path('module', 'islandora_scholar') . '/xsl/romeo.xsl');
-      $input = new DOMDocument();
       if ($romeo_content) {
-        $input->loadXML($romeo_content);
-        $xsl = $processor->importStylesheet($xsl);
-        $xml_output = $processor->transformToDoc($input);
-        $romeo_markup = $xml_output->saveXML();
-        $cache_time = variable_get('islandora_scholar_romeo_cache_time', '2');
-        cache_set($cache_id, $romeo_markup, 'cache', time() + ($cache_time * 86400));
-        return $romeo_markup;
+          $romeo_result = json_decode($romeo_content, true);
+          
+          $romeo_display = '<table cellpadding="3" cellspacing="3"><tr><td>
+                            <b>Journal: </b></td><td>'.$romeo_result['items'][0]['title'][0]['title'].'</td></tr>
+                            <tr><td><b>Published By: </b></td><td>'.$romeo_result['items'][0]['publishers'][0]['publisher']['name'][0]['name'].'</td></tr>
+                            <tr><td><b>Publisher policy</b></td><td><a href="'.$romeo_result['items'][0]['system_metadata']['uri'].'">View Sherpa Romeo record</a></td></tr>
+                            </table>';
+        return $romeo_display;
       }
       else {
         drupal_set_message(t('Could not retrieve RoMEO information for ISSN: @issn!', array('@issn' => $issn)), 'warning');
